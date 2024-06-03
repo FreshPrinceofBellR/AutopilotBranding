@@ -2,27 +2,23 @@
 function Log() {
 	[CmdletBinding()]
 	param (
-		[Parameter(Mandatory=$false)] [String] $message
+		[Parameter(Mandatory = $false)] [String] $message
 	)
-
-	$ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+	$ts = Get-Date -f "yyyy/MM/dd hh:mm:ss tt"
 	Write-Output "$ts $message"
 }
 
 # If we are running as a 32-bit process on an x64 system, re-launch as a 64-bit process
-if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64")
-{
-    if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe")
-    {
-        & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
-        Exit $lastexitcode
-    }
+if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64") {
+	if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe") {
+		& "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
+		Exit $lastexitcode
+	}
 }
 
 # Create a tag file just so Intune knows this was installed
-if (-not (Test-Path "$($env:ProgramData)\Microsoft\AutopilotBranding"))
-{
-    Mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
+if (-not (Test-Path "$($env:ProgramData)\Microsoft\AutopilotBranding")) {
+	mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
 }
 Set-Content -Path "$($env:ProgramData)\Microsoft\AutopilotBranding\AutopilotBranding.ps1.tag" -Value "Installed"
 
@@ -42,7 +38,7 @@ if ($ci.OsBuildNumber -le 22000) {
 	Copy-Item "$($installFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
 } else {
 	Log "Importing layout: $($installFolder)Start2.bin"
-	MkDir -Path "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState" -Force -ErrorAction SilentlyContinue | Out-Null
+	mkdir -Path "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState" -Force -ErrorAction SilentlyContinue | Out-Null
 	Copy-Item "$($installFolder)Start2.bin" "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState\Start2.bin" -Force
 }
 
@@ -50,9 +46,9 @@ if ($ci.OsBuildNumber -le 22000) {
 reg.exe load HKLM\TempUser "C:\Users\Default\NTUSER.DAT" | Out-Host
 
 Log "Setting up Autopilot theme"
-Mkdir "C:\Windows\Resources\OEM Themes" -Force | Out-Null
+mkdir "C:\Windows\Resources\OEM Themes" -Force | Out-Null
 Copy-Item "$installFolder\Autopilot.theme" "C:\Windows\Resources\OEM Themes\Autopilot.theme" -Force
-Mkdir "C:\Windows\web\wallpaper\Autopilot" -Force | Out-Null
+mkdir "C:\Windows\web\wallpaper\Autopilot" -Force | Out-Null
 Copy-Item "$installFolder\Autopilot.jpg" "C:\Windows\web\wallpaper\Autopilot\Autopilot.jpg" -Force
 Log "Setting Autopilot theme as the new user default"
 reg.exe add "HKLM\TempUser\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes" /v InstallTheme /t REG_EXPAND_SZ /d "%SystemRoot%\resources\OEM Themes\Autopilot.theme" /f | Out-Host
@@ -68,9 +64,8 @@ reg.exe unload HKLM\TempUser | Out-Host
 # STEP 3: Set time zone (if specified)
 if ($config.Config.TimeZone) {
 	Log "Setting time zone: $($config.Config.TimeZone)"
-	Set-Timezone -Id $config.Config.TimeZone
-}
-else {
+	Set-TimeZone -Id $config.Config.TimeZone
+} else {
 	# Enable location services so the time zone will be set automatically (even when skipping the privacy page in OOBE) when an administrator signs in
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" -Name "Value" -Type "String" -Value "Allow" -Force
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" -Name "SensorPermissionState" -Type "DWord" -Value 1 -Force
@@ -79,7 +74,7 @@ else {
 
 # STEP 4: Remove specified provisioned apps if they exist
 Log "Removing specified in-box provisioned apps"
-$apps = Get-AppxProvisionedPackage -online
+$apps = Get-AppxProvisionedPackage -Online
 $config.Config.RemoveApps.App | % {
 	$current = $_
 	$apps | ? {$_.DisplayName -eq $current} | % {
@@ -94,7 +89,7 @@ $config.Config.RemoveApps.App | % {
 if ($config.Config.OneDriveSetup) {
 	Log "Downloading OneDriveSetup"
 	$dest = "$($env:TEMP)\OneDriveSetup.exe"
-	$client = new-object System.Net.WebClient
+	$client = New-Object System.Net.WebClient
 	$client.DownloadFile($config.Config.OneDriveSetup, $dest)
 	Log "Installing: $dest"
 	$proc = Start-Process $dest -ArgumentList "/allusers" -WindowStyle Hidden -PassThru
@@ -120,21 +115,18 @@ if ($config.Config.Language) {
 
 # STEP 9: Add features on demand
 $currentWU = (Get-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -ErrorAction Ignore).UseWuServer
-if ($currentWU -eq 1)
-{
+if ($currentWU -eq 1) {
 	Log "Turning off WSUS"
 	Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"  -Name "UseWuServer" -Value 0
 	Restart-Service wuauserv
 }
-if ($config.Config.AddFeatures.Feature.Count -gt 0)
-{
+if ($config.Config.AddFeatures.Feature.Count -gt 0) {
 	$config.Config.AddFeatures.Feature | % {
 		Log "Adding Windows feature: $_"
 		Add-WindowsCapability -Online -Name $_ -ErrorAction SilentlyContinue | Out-Null
 	}
 }
-if ($currentWU -eq 1)
-{
+if ($currentWU -eq 1) {
 	Log "Turning on WSUS"
 	Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"  -Name "UseWuServer" -Value 1
 	Restart-Service wuauserv
@@ -152,8 +144,7 @@ reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v RegisteredOwn
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v RegisteredOrganization /t REG_SZ /d "$($config.Config.RegisteredOrganization)" /f /reg:64 | Out-Host
 
 # STEP 12: Configure OEM branding info
-if ($config.Config.OEMInfo)
-{
+if ($config.Config.OEMInfo) {
 	Log "Configuring OEM branding info"
 
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v Manufacturer /t REG_SZ /d "$($config.Config.OEMInfo.Manufacturer)" /f /reg:64 | Out-Host
