@@ -1,27 +1,27 @@
 #Setup initial logging function for tracking the Autopilot Branding process
 function Log() {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $false)] [String] $Message
-    )
-    $Timestamp = Get-Date -f "yyyy/MM/dd hh:mm:ss tt"
-    Write-Output "$Timestamp $Message"
+	[CmdletBinding()]
+	param (
+		[Parameter(Mandatory = $false)] [String] $Message
+	)
+	$Timestamp = Get-Date -f "yyyy/MM/dd hh:mm:ss tt"
+	Write-Output "$Timestamp $Message"
 }
 
 #Restart PowerShell in a 64-bit enviroment
 If ($ENV:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
-    Try {
-        &"$ENV:WINDIR\SysNative\WindowsPowershell\v1.0\PowerShell.exe" -File $PSCOMMANDPATH
-    } Catch {
-        Write-Error "Failed to start $PSCOMMANDPATH"
-        Exit -Code 1
-    }
-    Exit
+	Try {
+		&"$ENV:WINDIR\SysNative\WindowsPowershell\v1.0\PowerShell.exe" -File $PSCOMMANDPATH
+	} Catch {
+		Write-Error "Failed to start $PSCOMMANDPATH"
+		Exit -Code 1
+	}
+	Exit
 }
 
 #Create a tag file to identify the application has been installed
 If (-not (Test-Path "$($env:ProgramData)\Microsoft\AutopilotBranding")) {
-    mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
+	mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
 }
 Set-Content -Path "$($env:ProgramData)\Microsoft\AutopilotBranding\AutopilotBranding.ps1.tag" -Value "Installed"
 
@@ -40,14 +40,14 @@ Log "OS Build number: $($CompInfo.OsBuildNumber)"
 
 #If the OS build is less than 22000, run the Layout.xml
 If ($CompInfo.OsBuildNumber -le 22000) {
-    Log "Importing layout: $($InstallationFolder)Layout.xml"
-    Copy-Item "$($InstallationFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
+	Log "Importing layout: $($InstallationFolder)Layout.xml"
+	Copy-Item "$($InstallationFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
 } 
 #If the OS build number is anything other than being less than 22000, run the Start2.bin
 Else {
-    Log "Importing layout: $($InstallationFolder)Start2.bin"
-    mkdir -Path "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState" -Force -ErrorAction SilentlyContinue | Out-Null
-    Copy-Item "$($InstallationFolder)Start2.bin" "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState\Start2.bin" -Force
+	Log "Importing layout: $($InstallationFolder)Start2.bin"
+	mkdir -Path "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState" -Force -ErrorAction SilentlyContinue | Out-Null
+	Copy-Item "$($InstallationFolder)Start2.bin" "C:\Users\Default\AppData\Local\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState\Start2.bin" -Force
 }
 
 #STEP 2: Configure the desktop background
@@ -68,10 +68,10 @@ reg.exe add "HKLM\TempUser\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes" /v 
 
 #STEP 3: Set the timezone
 If ($Config.Config.TimeZone) {
-    Log "Setting time zone: $($Config.Config.TimeZone)"
-    Set-TimeZone -Id $Config.Config.TimeZone
+	Log "Setting time zone: $($Config.Config.TimeZone)"
+	Set-TimeZone -Id $Config.Config.TimeZone
 } Else {
-    #Enable location services so the time zone will be set automatically (even when skipping the privacy page in OOBE) when an administrator signs in
+	#Enable location services so the time zone will be set automatically (even when skipping the privacy page in OOBE) when an administrator signs in
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" -Name "Value" -Type "String" -Value "Allow" -Force
 	Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" -Name "SensorPermissionState" -Type "DWord" -Value 1 -Force
 	Start-Service -Name "lfsvc" -ErrorAction SilentlyContinue
