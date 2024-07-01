@@ -41,7 +41,7 @@ Log "OS Build number: $($CompInfo.OsBuildNumber)"
 #If the OS build is less than 22000, run the Layout.xml
 If ($CompInfo.OsBuildNumber -le 22000) {
 	Log "Importing layout: $($InstallationFolder)Layout.xml"
-	Copy-Item "$($InstallationFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
+	#Copy-Item "$($InstallationFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
 } 
 #If the OS build number is anything other than being less than 22000, run the Start2.bin
 Else {
@@ -65,6 +65,11 @@ Copy-Item "$InstallationFolder\Autopilot.jpg" "C:\Windows\web\wallpaper\Autopilo
 #Set the Autopilot theme to the user default and set the requirements in the registry
 Log "Setting Autopilot theme as the new user default"
 reg.exe add "HKLM\TempUser\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes" /v InstallTheme /t REG_EXPAND_SZ /d "%SystemRoot%\resources\OEM Themes\Autopilot.theme" /f | Out-Host
+Invoke-Expression -Command "& 'C:\Windows\Resources\OEM Themes\Autopilot.theme'"
+
+#Stop Start menu from opening on first logon
+Log "Stopping the start menu from opening at first logon"
+reg.exe add "HKLM\TempUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v StartShownOnUpgrade /t REG_DWORD /d 1 /f | Out-Host
 
 #STEP 3: Set the timezone
 If ($Config.Config.TimeZone) {
@@ -90,35 +95,23 @@ $Config.Config.RemoveApps.App | % {
 	}
 }
 
-#STEP 5: Install OneDrive
-If ($Config.Config.OneDriveSetup) {
-	Log "Downloading OneDriveSetup"
-	$Destination = "$($env:TEMP)\OneDriveSetup.exe"
-	$Client = New-Object System.Net.WebClient
-	$Client.DownloadFile($config.Config.OneDriveSetup, $Destination)
-	Log "Installing: $Destination"
-	$Process = Start-Process $Destination -ArgumentList "/allusers" -WindowStyle Hidden -PassThru
-	$Process.WaitForExit()
-	Log "OneDriveSetup exit code: $($Process.ExitCode)"
-}
-
-#STEP 6: Prevent Edge creating destkop shortcuts
+#STEP 5: Prevent Edge creating destkop shortcuts
 Log "Turning off (old) Edge desktop shortcut"
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v DisableEdgeDesktopShortcutCreation /t REG_DWORD /d 1 /f /reg:64 | Out-Host
 
-#STEP 7: Add language packs
+#STEP 6: Add language packs
 Get-ChildItem "$($InstallationFolder)LPs" -Filter *.cab | % {
 	Log "Adding language pack: $($_.FullName)"
 	Add-WindowsPackage -Online -NoRestart -PackagePath $_.FullName
 }
 
-#STEP 8: Change language
+#STEP 7: Change language
 If ($Config.Config.Language) {
 	Log "Configuring language using: $($Config.Config.Language)"
 	& $env:SystemRoot\System32\control.exe "intl.cpl,,/f:`"$($InstallationFolder)$($Config.Config.Language)`""
 }
 
-#STEP 9: Add on-demand features
+#STEP 8: Add on-demand features
 If ($Config.Config.AddFeatures.Feature.Count -gt 0) {
 	$Config.Config.AddFeatures.Feature | % {
 		Log "Adding Windows feature: $_"
@@ -126,7 +119,7 @@ If ($Config.Config.AddFeatures.Feature.Count -gt 0) {
 	}
 }
 
-#Step 10: Disable WSUS
+#Step 9: Disable WSUS
 $CurrentWU = (Get-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -ErrorAction Ignore).UseWuServer
 if ($CurrentWU -eq 1) {
 	Log "Turning off WSUS"
@@ -134,18 +127,18 @@ if ($CurrentWU -eq 1) {
 	Restart-Service wuauserv
 }
 
-#STEP 11: Customise default apps
+#STEP 10: Customise default apps
 if ($Config.Config.DefaultApps) {
 	Log "Setting default apps: $($Config.Config.DefaultApps)"
 	& Dism.exe /Online /Import-DefaultAppAssociations:`"$($InstallationFolder)$($Config.Config.DefaultApps)`"
 }
 
-#STEP 12: Set information from the config.xml
+#STEP 11: Set information from the config.xml
 Log "Configuring registered user information"
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v RegisteredOwner /t REG_SZ /d "$($Config.Config.RegisteredOwner)" /f /reg:64 | Out-Host
 reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v RegisteredOrganization /t REG_SZ /d "$($Config.Config.RegisteredOrganization)" /f /reg:64 | Out-Host
 
-#Step 13: Set OEM information
+#Step 12: Set OEM information
 If ($Config.Config.OEMInfo) {
 	Log "Configuring OEM branding info"
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v Manufacturer /t REG_SZ /d "$($Config.Config.OEMInfo.Manufacturer)" /f /reg:64 | Out-Host
@@ -157,7 +150,7 @@ If ($Config.Config.OEMInfo) {
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v Logo /t REG_SZ /d "C:\Windows\$($Config.Config.OEMInfo.Logo)" /f /reg:64 | Out-Host
 }
 
-#Step 14: Enable UE-V
+#Step 13: Enable UE-V
 Log "Enabling UE-V"
 Enable-UEV
 Set-UevConfiguration -Computer -SettingsStoragePath "%OneDriveCommercial%\UEV" -SyncMethod External -DisableWaitForSyncOnLogon
@@ -166,11 +159,11 @@ Get-ChildItem "$($InstallationFolder)UEV" -Filter *.xml | % {
 	Register-UevTemplate -Path $_.FullName
 }
 
-#Step 15: Disable network location fly-out
+#Step 14: Disable network location fly-out
 Log "Turning off network location fly-out"
 reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" /f
 
-#Step 16: Disable new Edge desktop icon
+#Step 15: Disable new Edge desktop icon
 Log "Turning off Edge desktop icon"
 reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\EdgeUpdate" /v "CreateDesktopShortcutDefault" /t REG_DWORD /d 0 /f /reg:64 | Out-Host
 
